@@ -1,0 +1,216 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class PlayerController : MonoBehaviour
+{
+    // defining variables / переменные
+    public float _speed = 16f / 3;
+    public float _jumpHeight = 14f / 2.5f;
+    public float _health = 100f;
+    public float _maxHealth = 100f;
+    public float _playerDistanceToEnd;
+    public int _moneyAmount = 0;
+    public string _gameName = "w1zlm's adventure";
+    public bool _isPlayerAlive = true;
+    public bool _canJump = true;
+
+    // private variables || приватные переменные
+    private bool _xAxisFlipped = false;
+    private bool _isJumpAnim = false;
+    private int _overlaps; // you can ignore it || это можно игнорировать
+    private int _fixedOverlaps; // you can ignore it too || это можно игнорировать тоже
+    private GameObject[] _fixedTouchingObjs = new GameObject[16]; // all objects on what player is standing (not colliding, standing) || все объекты на которых стоит игрок (не касается а стоит)
+
+    // is player colliding with anything || касается ли игрок чегото
+    public bool _isColliding
+    {
+        get
+        {
+            return _overlaps > 0;
+        }
+    }
+
+    // is player standing || стоит ли игрок
+    public bool _isStanding
+    {
+        get
+        {
+            return _fixedOverlaps > 0;
+        }
+    }
+
+    // player components / компоненты игрока
+    public Rigidbody2D _rigidbody;
+    public SpriteRenderer _renderer;
+    public Animator _animator;
+
+    void Start()
+    {
+        _rigidbody = GetComponent<Rigidbody2D>();
+        _renderer = GetComponent<SpriteRenderer>();
+        _animator = GetComponent<Animator>();
+    }
+
+    // flips/rotates player by X axis || разворачивает игрока по оси X (влево, вправо)
+    void FlipXAxis(bool a)
+    {
+        if (a)
+        {
+            _renderer.flipX = true;
+            _xAxisFlipped = true;
+        }
+        else
+        {
+            _renderer.flipX = false;
+            _xAxisFlipped = false;
+        }
+    }
+
+    // changes current animation || меняет текущую анимацию
+    void SetAnimBool(string name, bool val)
+    {
+        if (name == "running")
+        {
+            _animator.SetBool("running", val);
+            _animator.SetBool("falling", false);
+            _animator.SetBool("jumping", false);
+        }
+        else if (name == "falling")
+        {
+            _animator.SetBool("running", false);
+            _animator.SetBool("falling", val);
+            _animator.SetBool("jumping", false);
+        }
+        else if (name == "jumping")
+        {
+            _animator.SetBool("running", false);
+            _animator.SetBool("falling", false);
+            _animator.SetBool("jumping", val);
+        }
+        else if (name == "all")
+        {
+            _animator.SetBool("running", val);
+            _animator.SetBool("falling", val);
+            _animator.SetBool("jumping", val);
+        }
+    }
+
+    // runs jump animation (using coroutine) || запускает анимацию прыжка (использую короутин)
+    IEnumerator JumpAnim()
+    {
+        // time, when function started || время, когда функцию запустили
+        float startTime = Time.time;
+
+        // loop that lasts until 0.5 seconds past function start || цикл, который повторяется до тех пор пока не пройдёт 0.5 секунд с начала функции
+        while (Time.time - startTime < 0.5f)
+        {
+            if (Time.time - startTime > 0.05f)
+            {
+                if (_isStanding)
+                {
+                    break;
+                }
+            }
+
+            yield return null;
+        }
+
+        _isJumpAnim = false;
+
+        yield return null;
+    }
+
+    void Update()
+    {
+        // runs fall animation || запускает анимацию падения
+        // MORE COMPLEX: checks if player is colliding with anything (if he is in air) and jump animation is not running || ПОДРОБНЕЕ: проверяет, косается ли игрок чегото (находится ли он в воздухе) и анимация прыжка не проигрывается
+        if (_isStanding == false && _isJumpAnim == false)
+        {
+            SetAnimBool("falling", true);
+        }
+        if (_isStanding == false && _canJump == true)
+        {
+            _canJump = false;
+        }
+        // moves player left and right || двигает игрока вправо и влево
+        if (Input.GetKey(KeyCode.A))
+        {
+            // changes velocity to the left || меняет скорость игрока чтобы он шёл влево
+            _rigidbody.velocity = new Vector2(-_speed, _rigidbody.velocity.y);
+            if (_xAxisFlipped == false)
+            {
+                FlipXAxis(true);
+            }
+            // if player is standing and its not jump animation it runs run animation || если игрок стоит и анимация прыжка выключена то включает анимацию бега
+            if (_isStanding == true && _isJumpAnim == false)
+            {
+                SetAnimBool("running", true);
+            }
+        }
+        else if (Input.GetKey(KeyCode.D))
+        {
+            // changes velocity to the right || меняет скорость игрока чтобы он шёл вправо
+            _rigidbody.velocity = new Vector2(_speed, _rigidbody.velocity.y);
+            if (_xAxisFlipped == true)
+            {
+                FlipXAxis(false);
+            }
+            // if player is standing and its not jump animation it runs run animation || если игрок стоит и анимация прыжка выключена то включает анимацию бега
+            if (_isStanding == true && _isJumpAnim == false)
+            {
+                SetAnimBool("running", true);
+            }
+        }
+        else
+        {
+            // if buttons "A" and "D" is not pressed and player is standing, then stops player and runs idle animation || если кнопки "A" и "D" не нажаты и игрок стоит, то останавливает игрока и включает анимацию стояния (idle)
+            _rigidbody.velocity = new Vector2(0f, _rigidbody.velocity.y);
+            if (_isStanding == true && _isJumpAnim == false)
+            {
+                SetAnimBool("running", false);
+            }
+        }
+        if (Input.GetKeyDown(KeyCode.Space) && _canJump)
+        {
+            // makes player jump if space bar is pressed || заставляет игрока прыгнуть если пробел нажат
+            // and if player is standing (not in air) || и также если игрок стоит (не в воздухе)
+            _rigidbody.velocity = new Vector2(_rigidbody.velocity.x, _jumpHeight);
+            _canJump = false;
+
+            // runs jump animation || включает анимацию прыжка
+            _isJumpAnim = true;
+            SetAnimBool("jumping", true);
+
+            StartCoroutine(JumpAnim());
+        }
+    }
+
+    void OnCollisionEnter2D(Collision2D col)
+    {
+        _overlaps++;
+
+        foreach (var contact in col.contacts)
+        {
+            if (contact.normal.x <= 75f / 90 && contact.normal.x >= -75f / 90)
+            {
+                _fixedTouchingObjs[_fixedOverlaps] = col.gameObject;
+                _fixedOverlaps++;
+                _canJump = true; break;
+            }
+        }
+    }
+
+    void OnCollisionExit2D(Collision2D col)
+    {
+        _overlaps--;
+
+        foreach (GameObject _obj in _fixedTouchingObjs) {
+            if (_obj == col.gameObject)
+            {
+                _fixedOverlaps--;
+            }
+        }
+    }
+
+}
